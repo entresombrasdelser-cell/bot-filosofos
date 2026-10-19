@@ -1,6 +1,6 @@
 # Bot de frases de filósofos para Instagram (Reels)
 
-Publica un **Reel de 30 s** (1080×1920) con una frase de `frases.csv` **cada 2 días a las 22:00**, gratis:
+Publica un **Reel de 30 s** (1080×1920) con una frase de `frases.csv` **todos los días a las 22:00**, gratis:
 GitHub Actions (repo público = minutos ilimitados) + API oficial de Instagram (Instagram Login).
 
 - **Escena según el tema de la frase** (columna `tema` del CSV):
@@ -11,7 +11,7 @@ GitHub Actions (repo público = minutos ilimitados) + API oficial de Instagram (
 
 ## Cómo funciona
 1. El workflow `daily.yml` se lanza cada hora entre 00 y 06 UTC; solo continúa si en `BOT_TZ` son las 22:00 o más.
-2. `bot.py` comprueba en `published.json` si han pasado ≥ 2 días desde la última publicación.
+2. `bot.py` comprueba en `published.json` si ya se publicó hoy (1 Reel por día).
 3. Elige una frase aún no publicada, renderiza el video (~2 min) y lo sube a la rama **`media`**
    (rama huérfana que se reemplaza en cada publicación: el repo no crece).
 4. Instagram descarga el video desde `raw.githubusercontent.com`, lo procesa, y se publica el Reel.
@@ -49,4 +49,5 @@ Read and write.**
 ## Mantenimiento
 - Si pasas más de 60 días sin publicar el token caduca: genera uno nuevo y actualiza `IG_ACCESS_TOKEN`.
 - GitHub puede retrasar los cron unos minutos; el margen 22:00–23:59 lo absorbe.
-- GitHub desactiva los workflows tras 60 días sin actividad; el bot hace commits cada 2 días, así que no ocurre.
+- GitHub desactiva los workflows tras 60 días sin actividad; el bot hace commits cada día, así que no ocurre.
+

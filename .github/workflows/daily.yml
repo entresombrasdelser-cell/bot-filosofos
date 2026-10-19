@@ -3,7 +3,7 @@ name: Publicar frase en Instagram
 on:
   schedule:
     # Cada hora de 00 a 06 UTC; el paso "gate" deja pasar solo a partir de las 22:00 hora local (BOT_TZ).
-    # El bot publica como mucho 1 vez cada 2 días (ver INTERVAL_DAYS en bot.py).
+    # El bot publica como mucho 1 vez al día (ver INTERVAL_DAYS en bot.py).
     - cron: "0 0-6 * * *"
   workflow_dispatch:
     inputs:
@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
       force:
-        description: "Publicar aunque no toque por el intervalo de 2 días"
+        description: "Publicar aunque no toque por el intervalo mínimo entre publicaciones"
         type: boolean
         default: false
       fecha:
@@ -100,3 +100,4 @@ jobs:
         with:
           name: video-prueba
           path: output/*.mp4
+

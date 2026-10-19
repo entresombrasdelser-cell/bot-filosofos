@@ -24,7 +24,7 @@ from src.video import render_video
 ROOT = Path(__file__).resolve().parent
 CSV_PATH = ROOT / "frases.csv"
 STATE_PATH = ROOT / "published.json"
-INTERVAL_DAYS = 2
+INTERVAL_DAYS = 1
 HASHTAGS = "#filosofía #frases #reflexión #pensamiento #sabiduría #citas #reels"
 
 
