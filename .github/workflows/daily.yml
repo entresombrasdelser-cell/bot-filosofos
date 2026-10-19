@@ -1,0 +1,95 @@
+name: Publicar frase en Instagram
+
+on:
+  schedule:
+    # Cada hora de 00 a 06 UTC; el paso "gate" deja pasar solo a partir de las 22:00 hora local (BOT_TZ).
+    # El bot publica como mucho 1 vez cada 2 días (ver INTERVAL_DAYS en bot.py).
+    - cron: "0 0-6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Solo generar la imagen (no publicar)"
+        type: boolean
+        default: true
+      force:
+        description: "Publicar aunque no toque por el intervalo de 2 días"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instagram-bot
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Zona horaria: se puede cambiar en Settings > Secrets and variables > Actions > Variables (BOT_TZ)
+      BOT_TZ: ${{ vars.BOT_TZ || 'America/Santiago' }}
+    steps:
+      - name: Comprobar hora local (>= 22:00)
+        id: gate
+        run: |
+          h=$(TZ="$BOT_TZ" date +%H)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$h" -ge 22 ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Son las $h h en $BOT_TZ: todavía no es hora."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.go == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias y fuentes
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq fonts-ebgaramond fonts-linuxlibertine fonts-liberation fonts-dejavu-core || true
+
+      - name: Identidad de git
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ejecutar bot
+        if: steps.gate.outputs.go == 'true'
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: |
+          args=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+            if [ "${{ inputs.force }}" = "true" ]; then args="$args --force"; fi
+          fi
+          python bot.py $args
+
+      - name: Guardar registro de publicadas
+        if: steps.gate.outputs.go == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.dry_run)
+        run: |
+          git add -A published.json images
+          if ! git diff --cached --quiet; then
+            git commit -m "Registro: frase publicada"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Subir imagen de prueba
+        if: steps.gate.outputs.go == 'true' && github.event_name == 'workflow_dispatch' && inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagen-prueba
+          path: output/*.jpg
