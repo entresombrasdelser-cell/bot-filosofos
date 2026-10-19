@@ -1,0 +1,40 @@
+name: Preflight (no publica)
+
+# Prueba manual de extremo a extremo SIN publicar: renderiza el video, lo aloja en la rama `media`,
+# comprueba el Content-Type y deja que Instagram lo procese como borrador (contenedor sin publicar).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instagram-bot
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BOT_TZ: ${{ vars.BOT_TZ || 'America/Santiago' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias y fuentes
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq fonts-ebgaramond fonts-linuxlibertine fonts-liberation fonts-dejavu-core || true
+
+      - name: Preflight
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python bot.py --preflight

@@ -26,7 +26,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       # Zona horaria: se puede cambiar en Settings > Secrets and variables > Actions > Variables (BOT_TZ)
       BOT_TZ: ${{ vars.BOT_TZ || 'America/Santiago' }}
@@ -69,6 +69,7 @@ jobs:
         env:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           args=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -80,7 +81,7 @@ jobs:
       - name: Guardar registro de publicadas
         if: steps.gate.outputs.go == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.dry_run)
         run: |
-          git add -A published.json images
+          git add -A published.json
           if ! git diff --cached --quiet; then
             git commit -m "Registro: frase publicada"
             git pull --rebase origin "$GITHUB_REF_NAME"
@@ -91,5 +92,5 @@ jobs:
         if: steps.gate.outputs.go == 'true' && github.event_name == 'workflow_dispatch' && inputs.dry_run
         uses: actions/upload-artifact@v4
         with:
-          name: imagen-prueba
-          path: output/*.jpg
+          name: video-prueba
+          path: output/*.mp4

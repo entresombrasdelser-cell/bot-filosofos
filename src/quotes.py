@@ -14,6 +14,7 @@ class Quote:
     frase: str
     autor: str
     fuente: str
+    tema: str = "reflexion"
 
 
 def quote_id(frase: str) -> str:
@@ -35,7 +36,8 @@ def load_quotes(path: Path) -> list[Quote]:
             if qid in seen:
                 continue
             seen.add(qid)
-            quotes.append(Quote(qid, frase, row.get("autor", ""), row.get("fuente", "")))
+            tema = row.get("tema", "") or "reflexion"
+            quotes.append(Quote(qid, frase, row.get("autor", ""), row.get("fuente", ""), tema))
     return quotes
 
 
