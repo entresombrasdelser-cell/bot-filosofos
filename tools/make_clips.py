@@ -44,11 +44,13 @@ STYLE = ("cinematic film still, photorealistic, dark medieval fantasy, at night,
          "shallow depth of field, volumetric light, muted colors, film grain, vertical composition, "
          "the characters in the lower half of the frame, dark night sky or darkness in the upper half")
 K = "a knight in black plate armor and a long black cape holding a longsword"
-KC = "his black cat wearing tiny black plate armor and a small helmet"
+KC = ("his warrior black cat clad in a miniature suit of black plate armor with a tiny knight helmet and "
+      "a small black cloak")
 W = ("a wizard in a long black hooded robe with a long grey beard holding a gnarled wooden staff "
      "topped with a glowing crystal")
 WC = "his black cat with glowing golden eyes"
-CATS = "their two black cats, one wearing tiny black armor"
+CATS = ("only two black cats: a warrior cat in miniature black plate armor and a tiny helmet, and a black cat "
+        "with glowing golden eyes")
 
 # escena -> personaje -> (acción para FLUX, movimiento para Wan), y "lugares": un clip por lugar
 # ("ambos" usa solo los dos primeros lugares: aparecen juntos con menos frecuencia)
@@ -104,15 +106,16 @@ CATALOGO = {
         "lugares": ["in a dark forest", "under a sky full of stars in the mountains", "among old stone ruins"],
     },
     "heridos": {
-        "caballero": (f"{K}, wounded and exhausted, kneeling on one knee and leaning on his sword, his black "
-                      f"armor dented and bloodied, {KC} with a torn cloak beside him",
+        "caballero": (f"{K}, badly wounded and exhausted after the battle, kneeling on one knee and leaning on "
+                      f"his sword, his black armor cracked and covered in blood, blood dripping, {KC} with a "
+                      "torn cloak sitting beside him",
                       "heavy breathing, smoke drifts, embers float, the cape moves in the wind, slow push in"),
-        "mago": (f"{W}, wounded and exhausted, leaning on his staff, his black robe torn and bloodied, "
-                 f"{WC} limping beside him",
+        "mago": (f"{W}, badly wounded and exhausted after the battle, leaning on his staff, his black robe torn "
+                 f"and covered in blood, a bleeding cut on his face, {WC} limping beside him",
                  "heavy breathing, smoke drifts, embers float, the robe moves in the wind, slow push in"),
-        "ambos": (f"{K} and {W} wounded after the battle, the wizard helping the knight to stand, {CATS} "
-                  "beside them",
-                  "they slowly stand up, smoke drifts, embers float, slow push in"),
+        "ambos": (f"{K}, badly wounded and bleeding, sitting on the ground, and {W} kneeling beside him healing "
+                  f"his wounds with a soft glowing light from his hand, {CATS} beside them",
+                  "the healing light glows softly, smoke drifts, embers float, slow push in"),
         "lugares": ["on a smoking battlefield after the battle under a cold moon, fallen banners and broken "
                     "spears", "in the rain on a battlefield strewn with fallen shields", "among burning ruins"],
     },
