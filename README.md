@@ -13,7 +13,8 @@ y publicas. Todo gratis: GitHub Actions (repo público = minutos ilimitados) + b
 - **La escena se adapta a la frase** (columna `escena`): combate, demonios, asedio a un castillo, fogata, heridos
   tras la batalla, camino o vigilia/ritual. Clips de 5 s de `assets/clips/`, 7 por video con fundidos: primero los
   de la escena de la frase y luego escenas afines (p. ej. combate → asedio → heridos).
-- Frase que aparece línea a línea en el tercio superior, autor y fuente, viñeta y grano de película.
+- Frase que aparece línea a línea en el tercio superior, autor y fuente, viñeta, grano de película y la marca de
+  agua **@entresombrasdelser** (`HANDLE` en `src/video.py`).
 - **Sin audio**: la música se añade al subirlo en Instagram. El color del texto depende del `tema` de la frase
   (`reflexion` → cálido, `espiritual` → frío).
 

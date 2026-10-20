@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 CLIPS_DIR = ASSETS / "clips"
 CLIP_SECONDS = 5.0
+HANDLE = "@entresombrasdelser"  # marca de agua
 XFADE = 0.6  # fundido entre clips (s)
 
 PERSONAJES = ("caballero", "mago", "ambos")
@@ -174,6 +175,23 @@ def _text_layers(frase: str, autor: str, fuente: str, theme: str, seed: int):
     return items, layer, y_auth, (y0, y_auth + 190)
 
 
+def _watermark(theme: str, seed: int) -> tuple[Image.Image, int]:
+    """Nombre de la cuenta, pequeño y semitransparente, centrado sobre la zona que tapa la descripción del
+    Reel (abajo) y lejos de los botones (derecha)."""
+    fams = _available_families()
+    reg = random.Random(seed).choice(fams)[0] if fams else None  # misma familia que el autor
+    font, track = _load(reg, 34), 5
+    widths = [font.getlength(ch) for ch in HANDLE]
+    x = (W - (sum(widths) + track * (len(HANDLE) - 1))) / 2
+    layer = Image.new("RGBA", (W, 60), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for ch, w in zip(HANDLE, widths):  # espaciado entre letras
+        d.text((x + 2, 12), ch, font=font, fill=(0, 0, 0, 120))
+        d.text((x, 10), ch, font=font, fill=_rgb(PALETTES[theme]["text"]) + (150,))
+        x += w + track
+    return layer, int(H * 0.765)
+
+
 def _text_backdrop(y0: int, y1: int) -> Image.Image:
     """Franja oscura difuminada tras el texto (máscara L)."""
     m = Image.new("L", (W, H), 0)
@@ -195,6 +213,7 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
     vign = _vignette()
     items, auth_layer, y_auth, (ty0, ty1) = _text_layers(frase, autor, fuente, theme, seed)
     backdrop = _text_backdrop(ty0, ty1)
+    mark, y_mark = _watermark(theme, seed)
     black = Image.new("RGB", (W, H), (0, 0, 0))
     grains = [Image.effect_noise((W, H), 4.5).convert("RGB") for _ in range(6)]
 
@@ -251,6 +270,7 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
                 lay = auth_layer.copy()
                 lay.putalpha(lay.getchannel("A").point(lambda v, a=a: int(v * a)))
                 frame.paste(lay, (0, int(y_auth + (1 - a) * 20)), lay)
+            frame.paste(mark, (0, y_mark), mark)
 
             # fundido de entrada/salida
             fade = min(_ease(t / 1.0), _ease((duration - t) / 1.5))
