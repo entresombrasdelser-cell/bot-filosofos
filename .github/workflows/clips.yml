@@ -1,15 +1,16 @@
 name: Generar clips (caballero y mago)
 
 # Completa la biblioteca assets/clips/ con los Spaces gratuitos de Hugging Face (ver tools/make_clips.py).
-# La cuota gratuita de GPU solo da para unos pocos clips por ejecución, así que se lanza cada 3 horas;
-# cuando ya están todos, termina sin hacer nada.
+# La cuota gratuita de GPU da para ~1 clip por ejecución, así que se lanza cada hora; cuando la biblioteca
+# está completa, el workflow se desactiva solo (para añadir escenas nuevas, vuelve a activarlo).
 on:
   schedule:
-    - cron: "40 */3 * * *"
+    - cron: "40 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: clips
@@ -30,6 +31,13 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt gradio_client
 
+      - name: Recuperar fotogramas ya generados
+        uses: actions/cache@v4
+        with:
+          path: output/stills
+          key: stills-${{ github.run_id }}
+          restore-keys: stills-
+
       - name: Generar los clips que falten
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -46,4 +54,13 @@ jobs:
             git commit -m "Clips nuevos: $(git diff --cached --name-only | xargs -n1 basename | tr '\n' ' ')"
             git pull --rebase origin "$GITHUB_REF_NAME"
             git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Desactivar este workflow si la biblioteca está completa
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(python tools/make_clips.py --missing)" = "0" ]; then
+            echo "Biblioteca completa: desactivo el workflow."
+            gh workflow disable clips.yml
           fi

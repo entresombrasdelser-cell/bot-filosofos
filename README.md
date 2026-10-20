@@ -57,8 +57,9 @@ python tools/make_clips.py --stills    # solo los fotogramas (output/stills/), p
 python tools/make_clips.py --wait      # genera los clips que falten; si se agota la cuota, espera y sigue
 python tools/make_clips.py nieve       # rehace una escena
 ```
-La cuota gratuita de GPU de Hugging Face es pequeña (unos pocos clips seguidos y luego hay que esperar a que se
-recargue); con una cuenta gratis y `HF_TOKEN=...` da algo más.
+La cuota gratuita de GPU de Hugging Face es pequeña (~1 clip por vez y luego hay que esperar a que se
+recargue). El workflow *Generar clips* completa la biblioteca solo (cada hora, desde los servidores de GitHub) y
+se desactiva al terminar; para añadir escenas nuevas, edítalas en `SCENES` y vuelve a activarlo.
 
 ## Frases y temas
 `frases.csv`: columnas `frase, autor, fuente, tema`. `python tools/tag_quotes.py` rellena los temas vacíos

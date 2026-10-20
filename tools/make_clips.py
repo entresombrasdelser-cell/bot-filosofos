@@ -168,7 +168,11 @@ def main() -> int:
     ap.add_argument("names", nargs="*", help="escenas a generar (por defecto, todas las que falten)")
     ap.add_argument("--stills", action="store_true", help="solo genera los fotogramas en output/stills/")
     ap.add_argument("--wait", action="store_true", help="si se agota la cuota, espera y sigue (sin límite)")
+    ap.add_argument("--missing", action="store_true", help="solo imprime cuántos clips faltan")
     args = ap.parse_args()
+    if args.missing:
+        print(sum(not (CLIPS_DIR / f"{n}.mp4").exists() for n in SCENES))
+        return 0
     global WAIT_QUOTA
     WAIT_QUOTA = args.wait
     unknown = [n for n in args.names if n not in SCENES]
