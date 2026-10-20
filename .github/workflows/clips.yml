@@ -1,0 +1,49 @@
+name: Generar clips (caballero y mago)
+
+# Completa la biblioteca assets/clips/ con los Spaces gratuitos de Hugging Face (ver tools/make_clips.py).
+# La cuota gratuita de GPU solo da para unos pocos clips por ejecución, así que se lanza cada 3 horas;
+# cuando ya están todos, termina sin hacer nada.
+on:
+  schedule:
+    - cron: "40 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: clips
+  cancel-in-progress: false
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt gradio_client
+
+      - name: Generar los clips que falten
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # sale con error al agotarse la cuota: se guardan igualmente los clips ya generados
+          timeout 35m python tools/make_clips.py || echo "::warning::Generación interrumpida (cuota o Space ocupado); se reintentará."
+
+      - name: Guardar clips nuevos
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/clips
+          if ! git diff --cached --quiet; then
+            git commit -m "Clips nuevos: $(git diff --cached --name-only | xargs -n1 basename | tr '\n' ' ')"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi

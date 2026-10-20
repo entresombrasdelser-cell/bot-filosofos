@@ -1,7 +1,7 @@
 """Añade/actualiza la columna `tema` de frases.csv.
 
-tema = "espiritual"  -> escena del mago
-tema = "reflexion"   -> escena del caballero a caballo
+tema = "espiritual"  -> texto en tonos fríos
+tema = "reflexion"   -> texto en tonos cálidos
 
 Regla: autores de tradición mística/espiritual + palabras clave. Solo rellena las filas
 que no tienen tema, así que puedes corregir a mano el CSV y volver a ejecutarlo.

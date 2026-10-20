@@ -1,18 +1,18 @@
-name: Publicar frase en Instagram
+name: Borrador diario (Telegram)
 
 on:
   schedule:
     # Cada hora de 00 a 06 UTC; el paso "gate" deja pasar solo a partir de las 22:00 hora local (BOT_TZ).
-    # El bot publica como mucho 1 vez al día (ver INTERVAL_DAYS en bot.py).
+    # El bot manda como mucho 1 borrador al día (ver INTERVAL_DAYS en bot.py). No publica nada en Instagram.
     - cron: "0 0-6 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Solo generar la imagen (no publicar)"
+        description: "Solo generar el video (no enviarlo a Telegram)"
         type: boolean
         default: true
       force:
-        description: "Publicar aunque no toque por el intervalo mínimo entre publicaciones"
+        description: "Enviar aunque ya se haya mandado el borrador de hoy"
         type: boolean
         default: false
       fecha:
@@ -71,9 +71,8 @@ jobs:
       - name: Ejecutar bot
         if: steps.gate.outputs.go == 'true'
         env:
-          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-          IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          GITHUB_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FECHA: ${{ inputs.fecha }}
         run: |
           args=""
@@ -84,17 +83,17 @@ jobs:
           fi
           python bot.py $args
 
-      - name: Guardar registro de publicadas
+      - name: Guardar registro de frases usadas
         if: steps.gate.outputs.go == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.dry_run)
         run: |
           git add -A published.json
           if ! git diff --cached --quiet; then
-            git commit -m "Registro: frase publicada"
+            git commit -m "Registro: borrador enviado"
             git pull --rebase origin "$GITHUB_REF_NAME"
             git push origin "HEAD:$GITHUB_REF_NAME"
           fi
 
-      - name: Subir imagen de prueba
+      - name: Subir video de prueba
         if: steps.gate.outputs.go == 'true' && github.event_name == 'workflow_dispatch' && inputs.dry_run
         uses: actions/upload-artifact@v4
         with:

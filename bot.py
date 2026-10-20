@@ -1,11 +1,13 @@
-"""Bot que publica una frase de filósofo en Instagram (Reel de 30 s por defecto).
+"""Bot de frases de filósofos para Instagram: prepara cada día un Reel de 30 s (caballero y mago +
+frase) y lo manda como borrador a Telegram, para subirlo a mano y elegir la música en Instagram.
 
 Uso:
-    python bot.py --dry-run                    # genera output/*.mp4 sin publicar
-    python bot.py --dry-run --theme espiritual # fuerza la escena del mago
+    python bot.py --dry-run                    # genera output/*.mp4 sin enviar ni registrar nada
+    python bot.py --dry-run --theme espiritual # fuerza una frase de tema espiritual (colores fríos)
     python bot.py --dry-run --format image     # solo la imagen 1080x1350
     python bot.py --dry-run --date 2026-11-02
-    python bot.py                              # publica (si toca; ver --force)
+    python bot.py                              # borrador a Telegram (si toca; ver --force)
+    python bot.py --publish                    # publica directamente en Instagram, con música propia
 """
 from __future__ import annotations
 
@@ -16,10 +18,10 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src import publish, state as st
+from src import publish, state as st, telegram
 from src.quotes import load_quotes, pick_quote
 from src.render import STYLES, render_image
-from src.video import render_video
+from src.video import DURATION, render_video
 
 ROOT = Path(__file__).resolve().parent
 CSV_PATH = ROOT / "frases.csv"
@@ -37,10 +39,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="solo genera el archivo en output/")
     ap.add_argument("--force", action="store_true", help="ignora el intervalo de %d días" % INTERVAL_DAYS)
+    ap.add_argument("--publish", action="store_true",
+                    help="publica directamente en Instagram (con música propia) en vez de mandar el borrador")
     ap.add_argument("--preflight", action="store_true",
                     help="renderiza, aloja y deja que Instagram procese el video, pero NO publica")
     ap.add_argument("--format", choices=["video", "image"], default="video")
-    ap.add_argument("--theme", choices=["reflexion", "espiritual"], help="fuerza la escena del video")
+    ap.add_argument("--theme", choices=["reflexion", "espiritual"], help="fuerza el tema de la frase")
     ap.add_argument("--style", type=int, help="fuerza el estilo de imagen (0-%d)" % (len(STYLES) - 1))
     ap.add_argument("--date", help="fecha AAAA-MM-DD (por defecto, hoy en BOT_TZ)")
     args = ap.parse_args()
@@ -48,24 +52,37 @@ def main() -> int:
     tz = ZoneInfo(os.environ.get("BOT_TZ", "America/Santiago"))
     today = date.fromisoformat(args.date) if args.date else datetime.now(tz).date()
 
+    to_instagram = args.publish or args.preflight
+    tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not args.dry_run and not to_instagram:
+        if not tg_token or not chat_id:
+            print("Faltan los secretos TELEGRAM_BOT_TOKEN y/o TELEGRAM_CHAT_ID.", file=sys.stderr)
+            return 1
+        if args.format != "video":
+            print("El borrador de Telegram solo admite video.", file=sys.stderr)
+            return 1
+
     quotes = load_quotes(CSV_PATH)
     state = st.load_state(STATE_PATH)
 
     if not args.dry_run and not args.force and not args.preflight:
         last = st.last_published_date(state)
         if last and (today - last).days < INTERVAL_DAYS:
-            print(f"Última publicación: {last}. Aún no toca (cada {INTERVAL_DAYS} días). Nada que hacer.")
+            print(f"Último envío: {last}. Aún no toca (cada {INTERVAL_DAYS} días). Nada que hacer.")
             return 0
 
     pool = [q for q in quotes if not args.theme or q.tema == args.theme]
     quote = pick_quote(pool, st.published_ids(state), today.toordinal())
 
-    folder = "output" if args.dry_run else "media"
+    folder = "media" if to_instagram and not args.dry_run else "output"
     ext = "mp4" if args.format == "video" else "jpg"
     out = Path(folder) / f"{today.isoformat()}.{ext}"
     if args.format == "video":
         print(f"Generando video ({quote.tema})… puede tardar un par de minutos")
-        render_video(quote.frase, quote.autor, quote.fuente, quote.tema, today.toordinal(), ROOT / out)
+        # el borrador va sin música: se elige al subirlo en Instagram
+        render_video(quote.frase, quote.autor, quote.fuente, quote.tema, today.toordinal(), ROOT / out,
+                     music=to_instagram)
         print(f"Video generado: {out} — {quote.autor} [{quote.tema}]")
     else:
         style_idx = args.style if args.style is not None else len(state["published"]) % len(STYLES)
@@ -73,7 +90,14 @@ def main() -> int:
         print(f"Imagen generada: {out} (estilo {style_idx}) — {quote.autor}")
 
     if args.dry_run:
-        print("Modo prueba: no se publica ni se registra nada.")
+        print("Modo prueba: no se envía, publica ni registra nada.")
+        return 0
+
+    if not to_instagram:
+        title = f"Borrador del {today:%d/%m} — {quote.autor}\nAñade la música en Instagram y pega la descripción:"
+        telegram.send_draft(tg_token, chat_id, ROOT / out, title, build_caption(quote), DURATION)
+        st.record(STATE_PATH, state, quote.id, quote.autor, today, "borrador")
+        print("Borrador enviado a Telegram.")
         return 0
 
     token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
@@ -108,6 +132,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except publish.PublishError as e:
+    except (publish.PublishError, telegram.TelegramError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
