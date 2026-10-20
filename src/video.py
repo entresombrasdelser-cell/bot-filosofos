@@ -1,5 +1,6 @@
-"""Video vertical (1080x1920, 30 s) para Reels: clips cinematográficos de un caballero y un mago
-+ frase que aparece línea a línea.
+"""Video vertical (1080x1920, 30 s) para Reels: clips cinematográficos nocturnos del caballero de
+armadura negra y/o el mago de túnica negra, con sus gatos negros, + frase que aparece línea a línea.
+La escena de los clips (combate, fogata, heridos…) sale de la columna `escena` de la frase.
 
 Pipeline: ffmpeg encadena clips de assets/clips/ (ver tools/make_clips.py) con fundidos y los escala
 -> Pillow superpone viñeta, texto y grano en cada fotograma -> ffmpeg codifica H.264.
@@ -27,6 +28,19 @@ CLIPS_DIR = ASSETS / "clips"
 CLIP_SECONDS = 5.0
 XFADE = 0.6  # fundido entre clips (s)
 
+PERSONAJES = ("caballero", "mago", "ambos")
+ESCENAS = ("combate", "demonios", "asedio", "fogata", "heridos", "camino", "vigilia")
+# escenas que completan el video tras la de la frase, en orden (la última suele cerrar la "historia")
+AFINES = {
+    "combate": ("asedio", "heridos", "demonios"),
+    "demonios": ("combate", "heridos", "vigilia"),
+    "asedio": ("combate", "heridos", "fogata"),
+    "fogata": ("camino", "vigilia", "heridos"),
+    "heridos": ("fogata", "camino", "combate"),
+    "camino": ("fogata", "vigilia", "heridos"),
+    "vigilia": ("camino", "fogata", "demonios"),
+}
+
 PALETTES = {
     "reflexion": {"text": "#f6ecd9", "muted": "#cdb893", "accent": "#e0a64a"},
     "espiritual": {"text": "#eef3ff", "muted": "#a9b9e6", "accent": "#8fd3ff"},
@@ -46,20 +60,47 @@ def ffmpeg_exe() -> str:
 
 # ------------------------------------------------------------------ fondo
 
-def pick_clips(seed: int, duration: float = DURATION) -> list[Path]:
-    """Clips suficientes para cubrir `duration`, en orden aleatorio (fijo para cada semilla)."""
+def pick_personaje(tema: str, seed: int) -> str:
+    """Quién sale en el video, al azar (fijo por semilla): el mago es más probable con frases espirituales,
+    el caballero con el resto, y juntos aparecen 1 de cada 5 veces."""
+    weights = (0.3, 0.5, 0.2) if tema == "espiritual" else (0.5, 0.3, 0.2)
+    return random.Random(seed * 7 + 1).choices(PERSONAJES, weights)[0]
+
+
+def _tags(clip: Path) -> tuple[str, str]:
+    """caballero-combate-2.mp4 -> ("caballero", "combate")."""
+    parts = clip.stem.split("-")
+    return (parts[0], parts[1]) if len(parts) == 3 else ("", "")
+
+
+def pick_clips(seed: int, escena: str, personaje: str, duration: float = DURATION) -> list[Path]:
+    """Clips para cubrir `duration` (orden fijo para cada semilla): primero los del personaje en la escena
+    de la frase; luego los suyos en escenas afines (p. ej. combate -> asedio -> heridos); si aún faltan
+    (biblioteca incompleta), cualquiera."""
     clips = sorted(CLIPS_DIR.glob("*.mp4"))
     if not clips:
         raise RuntimeError("No hay clips en assets/clips/: genera la biblioteca con tools/make_clips.py.")
     n = math.ceil((duration - XFADE) / (CLIP_SECONDS - XFADE))
     rng = random.Random(seed)
+    tags = {c: _tags(c) for c in clips}
+
+    def group(people: tuple[str, ...], esc: str | None = None) -> list[Path]:
+        g = [c for c in clips if tags[c][0] in people and (esc is None or tags[c][1] == esc)]
+        rng.shuffle(g)
+        return g
+
+    tiers = [group((personaje,), escena)]
+    if personaje == "ambos":  # juntos hay menos clips: se completa con cada uno por separado
+        tiers.append(group(("caballero", "mago"), escena))
+    tiers += [group((personaje,), e) for e in AFINES.get(escena, ())]
+    tiers += [group((personaje,)), clips[:]]
     order: list[Path] = []
-    while len(order) < n:
-        batch = clips[:]
-        rng.shuffle(batch)
-        if order and batch[0] == order[-1]:  # que no se repita el mismo clip seguido
-            batch.reverse()
-        order += batch
+    for g in tiers:
+        order += [c for c in g if c not in order]
+        if len(order) >= n:
+            break
+    while len(order) < n:  # biblioteca muy pequeña: se repiten
+        order += order[:n - len(order)]
     return order[:n]
 
 
@@ -148,7 +189,8 @@ def _ease(x: float) -> float:
 # ------------------------------------------------------------------ render
 
 def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out_path: Path,
-                 duration: int = DURATION, music: bool = False, progress: bool = True) -> Path:
+                 escena: str = "camino", personaje: str = "caballero", duration: int = DURATION,
+                 music: bool = False, progress: bool = True) -> Path:
     theme = theme if theme in PALETTES else "reflexion"
     vign = _vignette()
     items, auth_layer, y_auth, (ty0, ty1) = _text_layers(frase, autor, fuente, theme, seed)
@@ -177,7 +219,7 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
     cmd += ["-c:a", "aac", "-b:a", "256k", "-shortest"] if music else ["-an"]
     cmd.append(str(out_path))
 
-    bg = _background(pick_clips(seed, duration), duration)
+    bg = _background(pick_clips(seed, escena, personaje, duration), duration)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     size = W * H * 3
     buf = b""

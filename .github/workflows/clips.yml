@@ -1,4 +1,4 @@
-name: Generar clips (caballero y mago)
+name: Generar clips (caballero, mago y gatos)
 
 # Completa la biblioteca assets/clips/ con los Spaces gratuitos de Hugging Face (ver tools/make_clips.py).
 # La cuota gratuita de GPU da para ~1 clip por ejecución, así que se lanza cada hora; cuando la biblioteca
@@ -7,6 +7,15 @@ on:
   schedule:
     - cron: "40 * * * *"
   workflow_dispatch:
+    inputs:
+      escenas:
+        description: "Escenas concretas separadas por espacios, p. ej. mago-fogata-1 (vacío = las que falten)"
+        type: string
+        default: ""
+      solo_fotogramas:
+        description: "Solo generar los fotogramas, para revisar el diseño (no crea clips)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -41,9 +50,22 @@ jobs:
       - name: Generar los clips que falten
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          ESCENAS: ${{ inputs.escenas }}
+          SOLO: ${{ inputs.solo_fotogramas }}
         run: |
+          args="$ESCENAS"
+          if [ "$SOLO" = "true" ]; then args="--stills $args"; fi
           # sale con error al agotarse la cuota: se guardan igualmente los clips ya generados
-          timeout 35m python tools/make_clips.py || echo "::warning::Generación interrumpida (cuota o Space ocupado); se reintentará."
+          timeout 35m python tools/make_clips.py $args || echo "::warning::Generación interrumpida (cuota o Space ocupado); se reintentará."
+
+      - name: Subir fotogramas (para revisarlos)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotogramas
+          path: output/stills/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Guardar clips nuevos
         run: |

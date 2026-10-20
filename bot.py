@@ -4,6 +4,7 @@ frase) y lo manda como borrador a Telegram, para subirlo a mano y elegir la mús
 Uso:
     python bot.py --dry-run                    # genera output/*.mp4 sin enviar ni registrar nada
     python bot.py --dry-run --theme espiritual # fuerza una frase de tema espiritual (colores fríos)
+    python bot.py --dry-run --escena combate --personaje mago
     python bot.py --dry-run --format image     # solo la imagen 1080x1350
     python bot.py --dry-run --date 2026-11-02
     python bot.py                              # borrador a Telegram (si toca; ver --force)
@@ -21,7 +22,7 @@ from zoneinfo import ZoneInfo
 from src import publish, state as st, telegram
 from src.quotes import load_quotes, pick_quote
 from src.render import STYLES, render_image
-from src.video import DURATION, render_video
+from src.video import DURATION, ESCENAS, PERSONAJES, pick_personaje, render_video
 
 ROOT = Path(__file__).resolve().parent
 CSV_PATH = ROOT / "frases.csv"
@@ -45,6 +46,8 @@ def main() -> int:
                     help="renderiza, aloja y deja que Instagram procese el video, pero NO publica")
     ap.add_argument("--format", choices=["video", "image"], default="video")
     ap.add_argument("--theme", choices=["reflexion", "espiritual"], help="fuerza el tema de la frase")
+    ap.add_argument("--escena", choices=ESCENAS, help="fuerza una frase de esa escena")
+    ap.add_argument("--personaje", choices=PERSONAJES, help="fuerza quién aparece en el video")
     ap.add_argument("--style", type=int, help="fuerza el estilo de imagen (0-%d)" % (len(STYLES) - 1))
     ap.add_argument("--date", help="fecha AAAA-MM-DD (por defecto, hoy en BOT_TZ)")
     args = ap.parse_args()
@@ -72,18 +75,20 @@ def main() -> int:
             print(f"Último envío: {last}. Aún no toca (cada {INTERVAL_DAYS} días). Nada que hacer.")
             return 0
 
-    pool = [q for q in quotes if not args.theme or q.tema == args.theme]
+    pool = [q for q in quotes if (not args.theme or q.tema == args.theme)
+            and (not args.escena or q.escena == args.escena)]
     quote = pick_quote(pool, st.published_ids(state), today.toordinal())
 
     folder = "media" if to_instagram and not args.dry_run else "output"
     ext = "mp4" if args.format == "video" else "jpg"
     out = Path(folder) / f"{today.isoformat()}.{ext}"
     if args.format == "video":
-        print(f"Generando video ({quote.tema})… puede tardar un par de minutos")
+        personaje = args.personaje or pick_personaje(quote.tema, today.toordinal())
+        print(f"Generando video ({personaje}, {quote.escena}, {quote.tema})… puede tardar un par de minutos")
         # el borrador va sin música: se elige al subirlo en Instagram
         render_video(quote.frase, quote.autor, quote.fuente, quote.tema, today.toordinal(), ROOT / out,
-                     music=to_instagram)
-        print(f"Video generado: {out} — {quote.autor} [{quote.tema}]")
+                     escena=quote.escena, personaje=personaje, music=to_instagram)
+        print(f"Video generado: {out} — {quote.autor} [{personaje}, {quote.escena}]")
     else:
         style_idx = args.style if args.style is not None else len(state["published"]) % len(STYLES)
         render_image(quote.frase, quote.autor, quote.fuente, style_idx, today.toordinal(), ROOT / out)

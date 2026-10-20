@@ -15,6 +15,7 @@ class Quote:
     autor: str
     fuente: str
     tema: str = "reflexion"
+    escena: str = "camino"
 
 
 def quote_id(frase: str) -> str:
@@ -23,7 +24,7 @@ def quote_id(frase: str) -> str:
 
 
 def load_quotes(path: Path) -> list[Quote]:
-    """Lee el CSV (columnas frase, autor, fuente). Descarta vacías y duplicadas."""
+    """Lee el CSV (columnas frase, autor, fuente, tema, escena). Descarta vacías y duplicadas."""
     quotes: list[Quote] = []
     seen: set[str] = set()
     with open(path, encoding="utf-8-sig", newline="") as f:
@@ -37,7 +38,8 @@ def load_quotes(path: Path) -> list[Quote]:
                 continue
             seen.add(qid)
             tema = row.get("tema", "") or "reflexion"
-            quotes.append(Quote(qid, frase, row.get("autor", ""), row.get("fuente", ""), tema))
+            escena = row.get("escena", "") or "camino"
+            quotes.append(Quote(qid, frase, row.get("autor", ""), row.get("fuente", ""), tema, escena))
     return quotes
 
 
