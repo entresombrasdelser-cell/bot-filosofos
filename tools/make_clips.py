@@ -68,27 +68,29 @@ MOTION = ("the cat is his loyal companion and stays close to him, slow cinematic
 # ("ambos" usa solo los dos primeros lugares: aparecen juntos con menos frecuencia)
 CATALOGO = {
     "combate": {
-        "caballero": (f"{K}, blocking the sword of an enemy soldier who attacks him from the front, more enemy "
-                      f"soldiers in front of him, {KC} standing loyally at his side and facing the enemies with him",
-                      "the knight clashes swords with the enemy soldier in front of him while his armored cat "
-                      "stands guard at his side, both facing the enemy, rain and embers drift"),
+        # de espaldas, frente al ejército enemigo: cualquier golpe va hacia delante, lejos del gato
+        "caballero": (f"seen from behind, {K} and {KC} standing side by side, only one cat, both facing a horde "
+                      "of enemy soldiers charging toward them, the knight raising his sword ready for battle",
+                      "the knight and his armored cat charge forward side by side into the enemy soldiers, the "
+                      "knight strikes the enemies ahead of him, rain and embers drift"),
         "mago": (f"{W}, blasting the enemy soldiers in front of him with lightning from his staff, {WC} standing "
                  "loyally at his side and hissing at the enemies",
                  "lightning arcs from the staff toward the enemy soldiers in the distance, his cat stays at his "
                  "side, embers drift"),
-        "ambos": (f"{K} and {W} standing side by side against enemy soldiers who charge from the front, the knight "
-                  f"blocking an enemy sword and the wizard casting fire at the enemies, {CATS}, one at each "
-                  "hero's side, all facing the enemies",
-                  "the knight clashes swords with an enemy soldier and the wizard hurls fire at the enemies in "
-                  "front of them, their cats stay at their sides facing the enemy, embers drift"),
+        "ambos": (f"seen from behind, {K} and {W} standing side by side with {CATS} at their feet, all facing a "
+                  "horde of enemy soldiers charging toward them, the knight raising his sword and the wizard his "
+                  "glowing staff",
+                  "the knight and the wizard advance side by side against the enemy soldiers ahead, the knight "
+                  "strikes the enemies in front of him and the wizard hurls fire at them, their cats walk beside "
+                  "them, embers drift"),
         "lugares": ["on a muddy battlefield lit by burning fires", "on an old stone bridge in the rain",
                     "in the burning streets of a medieval village"],
     },
     "demonios": {
-        "caballero": (f"{K}, standing between {KC} and a huge horned demon of fire, raising his sword toward "
-                      "the demon to protect his loyal cat",
-                      "the knight raises his sword toward the roaring demon in front of him, protecting his "
-                      "armored cat beside him, fire and embers swirl"),
+        "caballero": (f"seen from behind, {K} and {KC} standing side by side, only one cat, both facing a huge "
+                      "horned demon of fire in front of them, the knight raising his sword toward the demon",
+                      "the knight raises his sword and strikes at the roaring demon in front of him, his armored "
+                      "cat stands beside him facing the demon, fire and embers swirl"),
         "mago": (f"{W}, holding back a huge horned demon of shadow and fire with a shield of blue light "
                  f"from his staff, {WC} at his feet",
                  "blue magic light pulses against the demon's fire in front of him, the demon roars, embers swirl"),
