@@ -157,9 +157,10 @@ def _background(segments: list[Path], frames: list[int], speed: float, duration:
         last = f"x{i}"
     slow = (f"setpts=PTS/{speed:.4f},minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,"
             if speed < 1 else "")
-    parts.append(f"[{last}]{slow}tpad=stop_mode=clone:stop_duration=1,"
+    # limpia el ruido de compresión antes de escalar y luego realza bordes sin halos (CAS)
+    parts.append(f"[{last}]{slow}hqdn3d=1.5:1.5:3:3,tpad=stop_mode=clone:stop_duration=1,"
                  f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
-                 f"unsharp=5:5:0.6:5:5:0,format=rgb24[out]")
+                 f"cas=0.7,format=rgb24[out]")
     cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-t", f"{duration:.3f}",
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     return subprocess.Popen(cmd, stdout=subprocess.PIPE)

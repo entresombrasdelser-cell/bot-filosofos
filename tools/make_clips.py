@@ -58,47 +58,59 @@ W = ("a wizard in a long black hooded robe with a long grey beard holding a gnar
 WC = "his black cat with glowing golden eyes"
 CATS = ("only two black cats: a warrior cat in miniature black plate armor and a tiny helmet, and a black cat "
         "with glowing golden eyes")
+# se añade a todos los movimientos: los gatos son aliados (en batalla, el enemigo siempre delante del
+# héroe y el gato a su lado; si el gato queda delante, Wan hace que la espada lo golpee) y movimiento
+# pausado, que Wan resuelve sin manchas ni deformaciones
+MOTION = ("the cat is his loyal companion and stays close to him, slow cinematic movement, smooth natural motion, "
+          "steady camera, realistic, highly detailed")
 
 # escena -> personaje -> (acción para FLUX, movimiento para Wan), y "lugares": un clip por lugar
 # ("ambos" usa solo los dos primeros lugares: aparecen juntos con menos frecuencia)
 CATALOGO = {
     "combate": {
-        "caballero": (f"{K}, swinging his sword in fierce combat against enemy soldiers, {KC} charging "
-                      "into the fight beside him",
-                      "fierce sword fight, the knight strikes, sparks fly, enemies charge, embers and rain, "
-                      "dynamic camera"),
-        "mago": (f"{W}, blasting enemy soldiers with lightning from his staff, {WC} hissing beside him "
-                 "with its back arched",
-                 "lightning bursts from the staff, enemies are thrown back, sparks and embers fly, dynamic camera"),
-        "ambos": (f"{K} and {W} fighting back to back against enemy soldiers, the knight with his sword and "
-                  f"the wizard casting fire, {CATS} beside them",
-                  "fierce battle, sword strikes and bursts of fire, sparks and embers fly, dynamic camera"),
+        "caballero": (f"{K}, blocking the sword of an enemy soldier who attacks him from the front, more enemy "
+                      f"soldiers in front of him, {KC} standing loyally at his side and facing the enemies with him",
+                      "the knight clashes swords with the enemy soldier in front of him while his armored cat "
+                      "stands guard at his side, both facing the enemy, rain and embers drift"),
+        "mago": (f"{W}, blasting the enemy soldiers in front of him with lightning from his staff, {WC} standing "
+                 "loyally at his side and hissing at the enemies",
+                 "lightning arcs from the staff toward the enemy soldiers in the distance, his cat stays at his "
+                 "side, embers drift"),
+        "ambos": (f"{K} and {W} standing side by side against enemy soldiers who charge from the front, the knight "
+                  f"blocking an enemy sword and the wizard casting fire at the enemies, {CATS}, one at each "
+                  "hero's side, all facing the enemies",
+                  "the knight clashes swords with an enemy soldier and the wizard hurls fire at the enemies in "
+                  "front of them, their cats stay at their sides facing the enemy, embers drift"),
         "lugares": ["on a muddy battlefield lit by burning fires", "on an old stone bridge in the rain",
                     "in the burning streets of a medieval village"],
     },
     "demonios": {
-        "caballero": (f"{K}, fighting a huge horned demon of fire with his sword, {KC} snarling beside him",
-                      "the knight swings his sword at the roaring demon, fire and embers swirl, dramatic camera"),
+        "caballero": (f"{K}, standing between {KC} and a huge horned demon of fire, raising his sword toward "
+                      "the demon to protect his loyal cat",
+                      "the knight raises his sword toward the roaring demon in front of him, protecting his "
+                      "armored cat beside him, fire and embers swirl"),
         "mago": (f"{W}, holding back a huge horned demon of shadow and fire with a shield of blue light "
                  f"from his staff, {WC} at his feet",
-                 "blue magic light pulses against the demon's fire, the demon roars, sparks swirl"),
+                 "blue magic light pulses against the demon's fire in front of him, the demon roars, embers swirl"),
         "ambos": (f"{K} and {W} facing a giant horned demon of fire, the knight raising his sword and the "
                   f"wizard his glowing staff, {CATS} at their feet",
-                  "fire and blue magic clash, the demon roars, embers swirl, dramatic camera"),
+                  "fire and blue magic clash with the demon in front of them, the demon roars, embers swirl"),
         "lugares": ["in the ruins of a burning cathedral", "at the mouth of a hellish cave glowing red",
                     "in a dead forest under a blood red moon"],
     },
     "asedio": {
         "caballero": (f"{K}, leading soldiers with siege ladders in an assault on the gates of a dark castle, "
                       f"{KC} at his side",
-                      "the soldiers charge toward the castle, flaming arrows fly, fire and smoke rise, "
-                      "epic camera push"),
+                      "the soldiers charge toward the distant castle, flaming arrows fly over them, fire and smoke "
+                      "rise in the distance, his cat walks beside him, slow epic camera push"),
         "mago": (f"{W}, hurling a huge fireball from his staff at the walls of a dark castle under siege, "
                  f"{WC} beside him",
-                 "the fireball flies and explodes against the walls, fire and smoke rise, embers fly"),
+                 "the fireball flies far away and explodes against the distant castle walls, fire and smoke rise "
+                 "in the distance, his cat stays at his side"),
         "ambos": (f"{K} and {W} leading an army to conquer a dark castle, siege towers and burning arrows, "
                   f"{CATS} with them",
-                  "the army advances on the castle, flaming arrows fly, fire and smoke rise, epic camera push"),
+                  "the army advances on the distant castle, flaming arrows fly over them, fire and smoke rise, "
+                  "slow epic camera push"),
         "lugares": ["under a stormy night sky", "under a night sky full of burning arrows",
                     "in the snow at night"],
     },
@@ -160,7 +172,7 @@ def _catalog() -> dict[str, tuple[str, str, tuple[int, int, int]]]:
             action, motion = spec[pers]
             lugares = spec["lugares"][:2] if pers == "ambos" else spec["lugares"]
             for n, lugar in enumerate(lugares, 1):
-                out[f"{pers}-{esc}-{n}"] = (f"{action}, {lugar}, {STYLE}", motion, (n, pi, ei))
+                out[f"{pers}-{esc}-{n}"] = (f"{action}, {lugar}, {STYLE}", f"{motion}, {MOTION}", (n, pi, ei))
     return dict(sorted(out.items(), key=lambda kv: kv[1][2]))
 
 
