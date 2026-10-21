@@ -1,7 +1,8 @@
 name: Generar clips (caballero, mago y gatos)
 
-# Completa la biblioteca assets/clips/ con los Spaces gratuitos de Hugging Face (ver tools/make_clips.py).
-# La cuota gratuita de GPU da para ~1 clip por ejecución, así que se lanza cada hora; cuando la biblioteca
+# Completa la biblioteca assets/clips/ con los Spaces gratuitos de Hugging Face (ver tools/make_clips.py):
+# tomas de ~15 s en tres trozos (inicio + continuaciones b y c).
+# La cuota gratuita de GPU da para ~1-2 trozos por ejecución, así que se lanza cada hora; cuando la biblioteca
 # está completa, el workflow se desactiva solo (para añadir escenas nuevas, vuelve a activarlo).
 on:
   schedule:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       escenas:
-        description: "Escenas concretas separadas por espacios, p. ej. mago-fogata-1 (vacío = las que falten)"
+        description: "Escenas o continuaciones a rehacer, p. ej. mago-fogata-1 o mago-fogata-1c (vacío = lo que falte)"
         type: string
         default: ""
       solo_fotogramas:
@@ -47,7 +48,7 @@ jobs:
           key: stills-${{ github.run_id }}
           restore-keys: stills-
 
-      - name: Generar los clips que falten
+      - name: Generar lo que falte
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           ESCENAS: ${{ inputs.escenas }}

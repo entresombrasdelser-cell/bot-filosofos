@@ -1,5 +1,5 @@
-"""Bot de frases de filósofos para Instagram: prepara cada día un Reel de 30 s (caballero y mago +
-frase) y lo manda como borrador a Telegram, para subirlo a mano y elegir la música en Instagram.
+"""Bot de frases de filósofos para Instagram: prepara cada día un Reel de ~15 s (una sola toma del caballero
+y/o el mago + frase) y lo manda como borrador a Telegram, para subirlo a mano y elegir la música en Instagram.
 
 Uso:
     python bot.py --dry-run                    # genera output/*.mp4 sin enviar ni registrar nada
@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from src import publish, state as st, telegram
 from src.quotes import load_quotes, pick_quote
 from src.render import STYLES, render_image
-from src.video import DURATION, ESCENAS, PERSONAJES, pick_personaje, render_video
+from src.video import ESCENAS, PERSONAJES, pick_personaje, render_video
 
 ROOT = Path(__file__).resolve().parent
 CSV_PATH = ROOT / "frases.csv"
@@ -86,9 +86,9 @@ def main() -> int:
         personaje = args.personaje or pick_personaje(quote.tema, today.toordinal())
         print(f"Generando video ({personaje}, {quote.escena}, {quote.tema})… puede tardar un par de minutos")
         # el borrador va sin música: se elige al subirlo en Instagram
-        render_video(quote.frase, quote.autor, quote.fuente, quote.tema, today.toordinal(), ROOT / out,
-                     escena=quote.escena, personaje=personaje, music=to_instagram)
-        print(f"Video generado: {out} — {quote.autor} [{personaje}, {quote.escena}]")
+        duration = render_video(quote.frase, quote.autor, quote.fuente, quote.tema, today.toordinal(), ROOT / out,
+                                escena=quote.escena, personaje=personaje, music=to_instagram)
+        print(f"Video generado: {out} ({duration:.1f} s) — {quote.autor} [{personaje}, {quote.escena}]")
     else:
         style_idx = args.style if args.style is not None else len(state["published"]) % len(STYLES)
         render_image(quote.frase, quote.autor, quote.fuente, style_idx, today.toordinal(), ROOT / out)
@@ -100,7 +100,7 @@ def main() -> int:
 
     if not to_instagram:
         title = f"Borrador del {today:%d/%m} — {quote.autor}\nAñade la música en Instagram y pega la descripción:"
-        telegram.send_draft(tg_token, chat_id, ROOT / out, title, build_caption(quote), DURATION)
+        telegram.send_draft(tg_token, chat_id, ROOT / out, title, build_caption(quote), round(duration))
         st.record(STATE_PATH, state, quote.id, quote.autor, today, "borrador")
         print("Borrador enviado a Telegram.")
         return 0

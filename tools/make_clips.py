@@ -1,24 +1,29 @@
 """Genera la biblioteca de clips de fondo (assets/clips/*.mp4): el caballero de armadura negra con su
 gato acorazado y el mago de túnica negra con su gato negro, en escenas medievales nocturnas.
 
-Cada clip se llama <personaje>-<escena>-<n>.mp4:
+Cada escena es una toma continua de ~15 s en tres trozos de 5 s:
+    <personaje>-<escena>-<n>.mp4     el inicio
+    <personaje>-<escena>-<n>b.mp4    continuación animada desde un fotograma del final del anterior
+    <personaje>-<escena>-<n>c.mp4    ídem desde el final de la b
     personaje: caballero, mago o ambos
     escena:    combate, demonios, asedio, fogata, heridos, camino, vigilia (ver ESCENAS en src/video.py)
 
 Todo gratis y sin clave: dos Spaces públicos de Hugging Face (ZeroGPU).
     1. FLUX.1-schnell  -> fotograma 864x1536 a partir del texto de la escena
-    2. Wan 2.2 (I2V)    -> lo anima 5 s (480x832, 16 fps)
+    2. Wan 2.2 (I2V)    -> lo anima 5 s (480x832, 16 fps); las continuaciones parten del fotograma del trozo
+                           anterior que está OVERLAP fotogramas antes de su final (src/video.py los funde ahí)
     3. ffmpeg           -> interpolación de movimiento a 30 fps, recorte exacto a 5 s
 
 Uso:
     pip install gradio_client
-    python tools/make_clips.py                       # genera los que falten (primero una variante de cada)
-    python tools/make_clips.py mago-fogata-1         # rehace esa escena
+    python tools/make_clips.py                       # genera lo que falte, por orden (ver pending())
+    python tools/make_clips.py mago-fogata-1         # rehace esa escena desde el inicio (borra sus continuaciones)
+    python tools/make_clips.py mago-fogata-1c        # rehace solo esa continuación
     python tools/make_clips.py --stills --limit 4    # solo fotogramas (output/stills/), para revisarlos
     python tools/make_clips.py --wait                # si se agota la cuota, espera y sigue
-    python tools/make_clips.py --list                # lista todas las escenas
+    python tools/make_clips.py --list                # lista todas las escenas y sus trozos
 
-La cuota gratuita de ZeroGPU da para ~1 clip por vez; el workflow `clips.yml` completa la biblioteca
+La cuota gratuita de ZeroGPU da para ~1-2 trozos por vez; el workflow `clips.yml` completa la biblioteca
 desde GitHub. Si cambias el texto de una escena, el fotograma se regenera solo (su nombre lleva un hash
 del texto); para rehacer el clip, bórralo de assets/clips/.
 """
@@ -28,13 +33,15 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.video import CLIP_SECONDS, CLIPS_DIR, ESCENAS, PERSONAJES, ffmpeg_exe  # noqa: E402
+from src.video import (CLIP_SECONDS, CLIPS_DIR, CONTINUATIONS, ESCENAS, OVERLAP, PERSONAJES,  # noqa: E402
+                       clip_frames, ffmpeg_exe)
 
 STILLS_DIR = ROOT / "output" / "stills"
 FLUX_SPACE = "black-forest-labs/FLUX.1-schnell"
@@ -158,7 +165,36 @@ def _catalog() -> dict[str, tuple[str, str, tuple[int, int, int]]]:
 
 
 SCENES = _catalog()
+SEGMENTS = 1 + len(CONTINUATIONS)  # trozos por toma
 WAIT_QUOTA = False  # --wait: en vez de salir, espera a que se recargue la cuota
+
+
+def seg_name(name: str, k: int) -> str:
+    """Trozo k de la toma: 0 -> "mago-fogata-1", 1 -> "mago-fogata-1b", 2 -> "mago-fogata-1c"."""
+    return name + ("", *CONTINUATIONS)[k]
+
+
+def seg_path(name: str, k: int) -> Path:
+    return CLIPS_DIR / f"{seg_name(name, k)}.mp4"
+
+
+def n_segments(name: str) -> int:
+    """Trozos seguidos que ya tiene la toma."""
+    k = 0
+    while k < SEGMENTS and seg_path(name, k).exists():
+        k += 1
+    return k
+
+
+def pending() -> list[tuple[str, int]]:
+    """El siguiente trozo que falta de cada toma, por orden: primero se completan las tomas del lugar 1 de
+    todas las escenas (inicios, luego las continuaciones b, luego las c), después las del lugar 2, etc."""
+    jobs = []
+    for name, (_, _, (n, pi, ei)) in SCENES.items():
+        k = n_segments(name)
+        if k < SEGMENTS:
+            jobs.append(((n, k, pi, ei), name, k))
+    return [(name, k) for _, name, k in sorted(jobs)]
 
 
 def _retry(fn, what: str, tries: int = 4):
@@ -204,18 +240,18 @@ def make_still(name: str) -> Path:
     return out
 
 
-def make_clip(name: str) -> Path:
+def _animate(image: Path, name: str, k: int) -> Path:
+    """Anima `image` 5 s con Wan (el movimiento de la escena) y lo guarda como el trozo k de la toma."""
     from gradio_client import Client, handle_file
-    out = CLIPS_DIR / f"{name}.mp4"
-    still = make_still(name)
+    out = seg_path(name, k)
 
     def run():
         client = Client(WAN_SPACE, token=os.environ.get("HF_TOKEN") or None, verbose=False)
-        vid, _ = client.predict(input_image=handle_file(str(still)), prompt=SCENES[name][1], steps=6,
-                                duration_seconds=CLIP_SECONDS, seed=_seed(name), randomize_seed=False,
+        vid, _ = client.predict(input_image=handle_file(str(image)), prompt=SCENES[name][1], steps=6,
+                                duration_seconds=CLIP_SECONDS, seed=_seed(name) + k, randomize_seed=False,
                                 api_name="/generate_video")
         return vid["video"] if isinstance(vid, dict) else vid
-    raw = _retry(run, f"Wan {name}")
+    raw = _retry(run, f"Wan {out.stem}")
     CLIPS_DIR.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.name + ".part")  # si se corta a medias, no queda un .mp4 roto
     subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error", "-i", raw, "-t", str(CLIP_SECONDS), "-an",
@@ -226,38 +262,84 @@ def make_clip(name: str) -> Path:
     return out
 
 
+def make_clip(name: str, k: int = 0) -> Path:
+    """Trozo k de la toma: el inicio sale del fotograma de FLUX; cada continuación, del fotograma del trozo
+    anterior que está OVERLAP fotogramas antes de su final (ahí la funde src/video.py)."""
+    if k == 0:
+        return _animate(make_still(name), name, 0)
+    prev = seg_path(name, k - 1)
+    idx = clip_frames(prev) - OVERLAP
+    with tempfile.TemporaryDirectory() as tmp:
+        frame = Path(tmp) / "inicio.png"
+        subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(prev), "-vf", f"select=eq(n\\,{idx})",
+                        "-frames:v", "1", str(frame)], check=True)
+        if not frame.exists():
+            raise RuntimeError(f"No se pudo extraer el fotograma {idx} de {prev.name}")
+        return _animate(frame, name, k)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("names", nargs="*", help="escenas a generar (por defecto, todas las que falten)")
+    ap.add_argument("names", nargs="*",
+                    help="escenas (mago-fogata-1) o continuaciones (mago-fogata-1c) a rehacer; por defecto, lo que falte")
     ap.add_argument("--stills", action="store_true", help="solo genera los fotogramas en output/stills/")
-    ap.add_argument("--limit", type=int, help="como mucho N escenas")
+    ap.add_argument("--limit", type=int, help="como mucho N trozos (o fotogramas)")
     ap.add_argument("--wait", action="store_true", help="si se agota la cuota, espera y sigue (sin límite)")
-    ap.add_argument("--missing", action="store_true", help="solo imprime cuántos clips faltan")
-    ap.add_argument("--list", action="store_true", help="lista las escenas y si ya tienen clip")
+    ap.add_argument("--missing", action="store_true", help="solo imprime cuántos trozos faltan")
+    ap.add_argument("--list", action="store_true", help="lista las escenas y cuántos trozos tienen")
     args = ap.parse_args()
     global WAIT_QUOTA
     WAIT_QUOTA = args.wait
-    missing = [n for n in SCENES if not (CLIPS_DIR / f"{n}.mp4").exists()]
     if args.missing:
-        print(len(missing))
+        print(sum(SEGMENTS - n_segments(n) for n in SCENES))
         return 0
     if args.list:
         for n in SCENES:
-            print(("  " if n in missing else "✓ ") + n)
+            k = n_segments(n)
+            print("#" * k + "." * (SEGMENTS - k) + " " + n)
         return 0
-    unknown = [n for n in args.names if n not in SCENES]
-    if unknown:
-        print(f"Escenas desconocidas: {', '.join(unknown)} (ver --list)")
-        return 1
-    names = args.names or (list(SCENES) if args.stills else missing)
-    names = names[:args.limit] if args.limit else names
-    for i, name in enumerate(names):
-        t = time.time()
-        if args.stills:
+
+    if args.stills:
+        unknown = [n for n in args.names if n not in SCENES]
+        if unknown:
+            print(f"Escenas desconocidas: {', '.join(unknown)} (ver --list)")
+            return 1
+        names = args.names or list(SCENES)
+        names = names[:args.limit] if args.limit else names
+        for i, name in enumerate(names):
             print(f"[{i + 1}/{len(names)}] {name}: {make_still(name).name}", flush=True)
+        return 0
+
+    jobs = []  # (escena, trozo) pedidos a mano: se rehacen y se borran los trozos que venían detrás
+    for arg in args.names:
+        if arg in SCENES:
+            jobs.append((arg, 0))
+        elif arg[:-1] in SCENES and arg[-1] in CONTINUATIONS:
+            jobs.append((arg[:-1], CONTINUATIONS.index(arg[-1]) + 1))
         else:
-            print(f"[{i + 1}/{len(names)}] {name}: generando…", flush=True)
-            print(f"  -> {make_clip(name).relative_to(ROOT)} ({time.time() - t:.0f} s)", flush=True)
+            print(f"Escena desconocida: {arg} (ver --list)")
+            return 1
+    done = 0
+    while not args.limit or done < args.limit:
+        if args.names:
+            if not jobs:
+                break
+            name, k = jobs.pop(0)
+            if k > n_segments(name):
+                print(f"{seg_name(name, k)}: falta el trozo anterior ({seg_name(name, k - 1)})")
+                return 1
+        else:
+            todo = pending()
+            if not todo:
+                print("Biblioteca completa.")
+                break
+            name, k = todo[0]
+        t = time.time()
+        print(f"[{done + 1}] {seg_name(name, k)}: generando…", flush=True)
+        print(f"  -> {make_clip(name, k).relative_to(ROOT)} ({time.time() - t:.0f} s)", flush=True)
+        for j in range(k + 1, SEGMENTS):  # rehecho a mano: los trozos que venían detrás ya no encajan
+            seg_path(name, j).unlink(missing_ok=True)
+        done += 1
     return 0
 
 

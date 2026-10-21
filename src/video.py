@@ -1,16 +1,21 @@
-"""Video vertical (1080x1920, 30 s) para Reels: clips cinematográficos nocturnos del caballero de
-armadura negra y/o el mago de túnica negra, con sus gatos negros, + frase que aparece línea a línea.
-La escena de los clips (combate, fogata, heridos…) sale de la columna `escena` de la frase.
+"""Video vertical (1080x1920, ~15 s) para Reels: UNA sola toma continua, nocturna y cinematográfica, del
+caballero de armadura negra y/o el mago de túnica negra con sus gatos negros, + frase que aparece línea a línea.
+La escena (combate, fogata, heridos…) sale de la columna `escena` de la frase.
 
-Pipeline: ffmpeg encadena clips de assets/clips/ (ver tools/make_clips.py) con fundidos y los escala
--> Pillow superpone viñeta, texto y grano en cada fotograma -> ffmpeg codifica H.264.
+Una toma = un clip de 5 s de assets/clips/ (`caballero-fogata-1.mp4`) + sus continuaciones (`…-1b.mp4`,
+`…-1c.mp4`), cada una animada desde un fotograma del final de la anterior (ver tools/make_clips.py), así que
+se encadenan sin cambiar de plano. Si la toma aún es corta, se ralentiza (cámara lenta interpolada) y el
+video dura algo menos.
+
+Pipeline: ffmpeg une los trozos de la toma, la ralentiza si hace falta y la escala -> Pillow superpone
+viñeta, texto y grano en cada fotograma -> ffmpeg codifica H.264.
 Sin audio por defecto (la música se elige en Instagram); con music=True lleva el rock original
 sintetizado de src/music.py.
 """
 from __future__ import annotations
 
-import math
 import random
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -21,25 +26,28 @@ from .render import _available_families, _load, _rgb, _wrap
 
 W, H = 1080, 1920
 FPS = 30
-DURATION = 30
+DURATION = 15  # duración objetivo (s); una toma completa (3 trozos) dura ~14.6 s
+MIN_SPEED = 0.5  # cámara lenta máxima para estirar una toma corta
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 CLIPS_DIR = ASSETS / "clips"
 CLIP_SECONDS = 5.0
+CLIP_W, CLIP_H = 480, 832  # resolución de Wan 2.2
+CONTINUATIONS = ("b", "c")  # sufijos de las continuaciones de cada toma
+OVERLAP = 6  # fotogramas en que cada continuación se funde con el final del trozo anterior
 HANDLE = "@entresombrasdelser"  # marca de agua
-XFADE = 0.6  # fundido entre clips (s)
 
 PERSONAJES = ("caballero", "mago", "ambos")
 ESCENAS = ("combate", "demonios", "asedio", "fogata", "heridos", "camino", "vigilia")
-# escenas que completan el video tras la de la frase, en orden (la última suele cerrar la "historia")
+# escenas de reserva si aún no hay ninguna toma del personaje en la escena de la frase
 AFINES = {
-    "combate": ("asedio", "heridos", "demonios"),
-    "demonios": ("combate", "heridos", "vigilia"),
-    "asedio": ("combate", "heridos", "fogata"),
-    "fogata": ("camino", "vigilia", "heridos"),
+    "combate": ("asedio", "demonios", "heridos"),
+    "demonios": ("combate", "asedio", "vigilia"),
+    "asedio": ("combate", "demonios", "heridos"),
+    "fogata": ("vigilia", "camino", "heridos"),
     "heridos": ("fogata", "camino", "combate"),
     "camino": ("fogata", "vigilia", "heridos"),
-    "vigilia": ("camino", "fogata", "demonios"),
+    "vigilia": ("fogata", "camino", "demonios"),
 }
 
 PALETTES = {
@@ -59,6 +67,17 @@ def ffmpeg_exe() -> str:
         raise RuntimeError("No se encontró ffmpeg (instala ffmpeg o `pip install imageio-ffmpeg`).") from e
 
 
+def clip_frames(clip: Path) -> int:
+    """Número de fotogramas (a FPS) de un clip, según la duración que informa ffmpeg."""
+    err = subprocess.run([ffmpeg_exe(), "-hide_banner", "-i", str(clip)], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace").stderr
+    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", err)
+    if not m:
+        raise RuntimeError(f"No se pudo leer la duración de {clip.name}")
+    h, mi, sec = m.groups()
+    return round((int(h) * 3600 + int(mi) * 60 + float(sec)) * FPS)
+
+
 # ------------------------------------------------------------------ fondo
 
 def pick_personaje(tema: str, seed: int) -> str:
@@ -68,58 +87,80 @@ def pick_personaje(tema: str, seed: int) -> str:
     return random.Random(seed * 7 + 1).choices(PERSONAJES, weights)[0]
 
 
-def _tags(clip: Path) -> tuple[str, str]:
-    """caballero-combate-2.mp4 -> ("caballero", "combate")."""
-    parts = clip.stem.split("-")
-    return (parts[0], parts[1]) if len(parts) == 3 else ("", "")
-
-
-def pick_clips(seed: int, escena: str, personaje: str, duration: float = DURATION) -> list[Path]:
-    """Clips para cubrir `duration` (orden fijo para cada semilla): primero los del personaje en la escena
-    de la frase; luego los suyos en escenas afines (p. ej. combate -> asedio -> heridos); si aún faltan
-    (biblioteca incompleta), cualquiera."""
-    clips = sorted(CLIPS_DIR.glob("*.mp4"))
-    if not clips:
-        raise RuntimeError("No hay clips en assets/clips/: genera la biblioteca con tools/make_clips.py.")
-    n = math.ceil((duration - XFADE) / (CLIP_SECONDS - XFADE))
-    rng = random.Random(seed)
-    tags = {c: _tags(c) for c in clips}
-
-    def group(people: tuple[str, ...], esc: str | None = None) -> list[Path]:
-        g = [c for c in clips if tags[c][0] in people and (esc is None or tags[c][1] == esc)]
-        rng.shuffle(g)
-        return g
-
-    tiers = [group((personaje,), escena)]
-    if personaje == "ambos":  # juntos hay menos clips: se completa con cada uno por separado
-        tiers.append(group(("caballero", "mago"), escena))
-    tiers += [group((personaje,), e) for e in AFINES.get(escena, ())]
-    tiers += [group((personaje,)), clips[:]]
-    order: list[Path] = []
-    for g in tiers:
-        order += [c for c in g if c not in order]
-        if len(order) >= n:
+def take_segments(base: Path) -> list[Path]:
+    """caballero-fogata-1.mp4 -> [ese clip, …-1b.mp4, …-1c.mp4] (las continuaciones que existan, en orden)."""
+    segs = [base]
+    for suf in CONTINUATIONS:
+        nxt = base.with_name(f"{base.stem}{suf}.mp4")
+        if not nxt.exists():
             break
-    while len(order) < n:  # biblioteca muy pequeña: se repiten
-        order += order[:n - len(order)]
-    return order[:n]
+        segs.append(nxt)
+    return segs
 
 
-def _background(clips: list[Path], duration: float) -> subprocess.Popen:
-    """ffmpeg que entrega por stdout los fotogramas RGB 1080x1920 del fondo encadenado."""
+def _takes() -> dict[Path, tuple[str, str]]:
+    """Clip inicial de cada toma -> (personaje, escena): caballero-combate-2.mp4 -> ("caballero", "combate")."""
+    out = {}
+    for c in sorted(CLIPS_DIR.glob("*.mp4")):
+        parts = c.stem.split("-")
+        if len(parts) == 3 and parts[2].isdigit():  # las continuaciones (…-2b) no empiezan toma
+            out[c] = (parts[0], parts[1])
+    return out
+
+
+def pick_take(seed: int, escena: str, personaje: str) -> list[Path]:
+    """Trozos de UNA sola toma (fija para cada semilla): del personaje en la escena de la frase; si no hay, de
+    cada uno por separado (si son "ambos"), luego en escenas afines y, por último, cualquiera. Entre las
+    candidatas, de las más largas (con más continuaciones)."""
+    takes = _takes()
+    if not takes:
+        raise RuntimeError("No hay clips en assets/clips/: genera la biblioteca con tools/make_clips.py.")
+    tiers = [[(personaje, escena)]]
+    if personaje == "ambos":  # juntos hay menos tomas: si falta, uno de los dos en esa escena
+        tiers.append([("caballero", escena), ("mago", escena)])
+    tiers += [[(personaje, e)] for e in AFINES.get(escena, ())]
+    tiers += [[(personaje, e) for e in ESCENAS]]
+    rng = random.Random(seed)
+    for wanted in tiers:
+        cands = [take_segments(c) for c, tag in takes.items() if tag in wanted]
+        if cands:
+            longest = max(len(t) for t in cands)
+            return rng.choice([t for t in cands if len(t) == longest])
+    return take_segments(rng.choice(sorted(takes)))
+
+
+def take_plan(segments: list[Path], duration: float = DURATION) -> tuple[list[int], float, float]:
+    """(fotogramas de cada trozo, velocidad, duración del video). Una toma corta se ralentiza (hasta
+    MIN_SPEED) para acercarse a `duration`; si ya casi llega (>= 85 %), va a velocidad real."""
+    frames = [clip_frames(s) for s in segments]
+    length = (sum(frames) - OVERLAP * (len(frames) - 1)) / FPS
+    speed = min(max(length / duration, MIN_SPEED), 1.0)
+    if speed >= 0.85:
+        speed = 1.0
+    return frames, speed, min(length / speed, duration)
+
+
+def _background(segments: list[Path], frames: list[int], speed: float, duration: float) -> subprocess.Popen:
+    """ffmpeg que entrega por stdout los fotogramas RGB 1080x1920 de la toma: une los trozos (cada continuación
+    empieza en el fotograma del trozo anterior del que se animó y se funde con él durante OVERLAP fotogramas),
+    la ralentiza con interpolación de movimiento si speed < 1 y la escala."""
     cmd = [ffmpeg_exe(), "-loglevel", "error"]
-    for c in clips:
+    for c in segments:
         cmd += ["-i", str(c)]
-    parts = [f"[{i}:v]scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
-             f"setsar=1,tpad=stop_mode=clone:stop_duration=1,trim=duration={CLIP_SECONDS},"
-             f"setpts=PTS-STARTPTS,fps={FPS}[v{i}]" for i in range(len(clips))]
-    last = "v0"
-    for i in range(1, len(clips)):
-        parts.append(f"[{last}][v{i}]xfade=transition=fade:duration={XFADE}:"
-                     f"offset={i * (CLIP_SECONDS - XFADE):.3f}[x{i}]")
+    parts = [f"[{i}:v]scale={CLIP_W}:{CLIP_H}:force_original_aspect_ratio=increase,crop={CLIP_W}:{CLIP_H},"
+             f"setsar=1,setpts=PTS-STARTPTS,fps={FPS}[v{i}]" for i in range(len(segments))]
+    last, offset = "v0", 0
+    for i in range(1, len(segments)):
+        offset += frames[i - 1] - OVERLAP
+        parts.append(f"[{last}][v{i}]xfade=transition=fade:duration={OVERLAP / FPS:.4f}:"
+                     f"offset={offset / FPS:.4f}[x{i}]")
         last = f"x{i}"
-    parts.append(f"[{last}]unsharp=5:5:0.6:5:5:0,format=rgb24[out]")
-    cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-t", str(duration),
+    slow = (f"setpts=PTS/{speed:.4f},minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,"
+            if speed < 1 else "")
+    parts.append(f"[{last}]{slow}tpad=stop_mode=clone:stop_duration=1,"
+                 f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
+                 f"unsharp=5:5:0.6:5:5:0,format=rgb24[out]")
+    cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-t", f"{duration:.3f}",
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
     return subprocess.Popen(cmd, stdout=subprocess.PIPE)
 
@@ -207,9 +248,15 @@ def _ease(x: float) -> float:
 # ------------------------------------------------------------------ render
 
 def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out_path: Path,
-                 escena: str = "camino", personaje: str = "caballero", duration: int = DURATION,
-                 music: bool = False, progress: bool = True) -> Path:
+                 escena: str = "camino", personaje: str = "caballero", duration: float = DURATION,
+                 music: bool = False, progress: bool = True) -> float:
+    """Genera el video y devuelve su duración en segundos (la toma decide: ~10-15 s)."""
     theme = theme if theme in PALETTES else "reflexion"
+    segments = pick_take(seed, escena, personaje)
+    frames, speed, duration = take_plan(segments, duration)
+    if progress:
+        print(f"  toma: {' + '.join(s.name for s in segments)} ({duration:.1f} s"
+              + (f", cámara lenta x{speed:.2f})" if speed < 1 else ")"), flush=True)
     vign = _vignette()
     items, auth_layer, y_auth, (ty0, ty1) = _text_layers(frase, autor, fuente, theme, seed)
     backdrop = _text_backdrop(ty0, ty1)
@@ -217,9 +264,12 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
     black = Image.new("RGB", (W, H), (0, 0, 0))
     grains = [Image.effect_noise((W, H), 4.5).convert("RGB") for _ in range(6)]
 
-    n_frames = duration * FPS
-    t_line0, t_gap = 1.6, 0.9  # el texto empieza a los 1.6 s, una línea cada 0.9 s
-    t_auth = t_line0 + t_gap * len(items) + 0.6
+    n_frames = round(duration * FPS)
+    # el texto empieza a los 1.4 s, una línea cada 0.9 s como mucho: toda la frase a la vista antes de la
+    # mitad del video, para que dé tiempo a leerla
+    t_line0 = 1.4
+    t_gap = min(0.9, (duration * 0.45 - t_line0) / max(len(items), 1))
+    t_auth = t_line0 + t_gap * len(items) + 0.5
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [ffmpeg_exe(), "-y", "-loglevel", "error",
@@ -238,7 +288,7 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
     cmd += ["-c:a", "aac", "-b:a", "256k", "-shortest"] if music else ["-an"]
     cmd.append(str(out_path))
 
-    bg = _background(pick_clips(seed, escena, personaje, duration), duration)
+    bg = _background(segments, frames, speed, duration)
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     size = W * H * 3
     buf = b""
@@ -291,10 +341,10 @@ def render_video(frase: str, autor: str, fuente: str, theme: str, seed: int, out
         wav.unlink(missing_ok=True)
     if rc != 0:
         raise RuntimeError(f"ffmpeg terminó con código {rc}")
-    return out_path
+    return duration
 
 
-def render_poster(video_path: Path, out_path: Path, at: float = 12.0) -> None:
-    """Extrae un fotograma (por defecto a los 12 s) para previsualizar."""
+def render_poster(video_path: Path, out_path: Path, at: float = 8.0) -> None:
+    """Extrae un fotograma (por defecto a los 8 s, con la frase ya completa) para previsualizar."""
     subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error", "-ss", str(at), "-i", str(video_path),
                     "-frames:v", "1", "-pix_fmt", "yuvj420p", "-q:v", "2", str(out_path)], check=True)

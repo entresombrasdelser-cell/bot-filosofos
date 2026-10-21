@@ -1,6 +1,6 @@
 # Bot de frases de filósofos para Instagram (Reels)
 
-Prepara **cada día a las 22:00** un **Reel de 30 s** (1080×1920) con una frase de `frases.csv` y te lo manda
+Prepara **cada día a las 22:00** un **Reel de ~15 s** (1080×1920) con una frase de `frases.csv` y te lo manda
 **como borrador a Telegram**, con la descripción lista para copiar. Tú lo compartes a Instagram, eliges la música
 y publicas. Todo gratis: GitHub Actions (repo público = minutos ilimitados) + bot de Telegram.
 
@@ -11,8 +11,9 @@ y publicas. Todo gratis: GitHub Actions (repo público = minutos ilimitados) + b
   acorazado, el **mago** de túnica negra y báculo con su gato negro, o los dos juntos (al azar: más el mago con
   frases espirituales, más el caballero con el resto, juntos 1 de cada 5).
 - **La escena se adapta a la frase** (columna `escena`): combate, demonios, asedio a un castillo, fogata, heridos
-  tras la batalla, camino o vigilia/ritual. Clips de 5 s de `assets/clips/`, 7 por video con fundidos: primero los
-  de la escena de la frase y luego escenas afines (p. ej. combate → asedio → heridos).
+  tras la batalla, camino o vigilia/ritual. **Cada video es una sola toma continua** (sin saltar entre escenas):
+  un clip de `assets/clips/` y sus continuaciones. Si la toma aún no está completa, va en cámara lenta y el video
+  dura algo menos (~10 s).
 - Frase que aparece línea a línea en el tercio superior, autor y fuente, viñeta, grano de película y la marca de
   agua **@entresombrasdelser** (`HANDLE` en `src/video.py`).
 - **Sin audio**: la música se añade al subirlo en Instagram. El color del texto depende del `tema` de la frase
@@ -55,19 +56,21 @@ python bot.py --dry-run --format image       # solo la imagen 1080x1350
 
 ## Biblioteca de clips
 `tools/make_clips.py` genera los clips gratis con dos Spaces públicos de Hugging Face: **FLUX.1-schnell** crea el
-fotograma de cada escena y **Wan 2.2** lo anima 5 s; ffmpeg lo interpola a 30 fps. El catálogo (`CATALOGO` en el
-script) combina personaje × escena × lugar: 56 clips llamados `<personaje>-<escena>-<n>.mp4`
-(`python tools/make_clips.py --list` los muestra). Para cambiar el aspecto de los personajes, edita `K`, `KC`, `W`
+fotograma de cada escena y **Wan 2.2** lo anima 5 s; ffmpeg lo interpola a 30 fps. Cada toma se alarga a ~15 s
+con dos continuaciones (`…-<n>b.mp4`, `…-<n>c.mp4`), animadas desde el final del trozo anterior para que no haya
+cortes. El catálogo (`CATALOGO` en el script) combina personaje × escena × lugar: 56 tomas llamadas
+`<personaje>-<escena>-<n>.mp4` (`python tools/make_clips.py --list` las muestra con sus trozos). Para cambiar el aspecto de los personajes, edita `K`, `KC`, `W`
 y `WC` al principio del script.
 ```bash
 pip install gradio_client
 python tools/make_clips.py --stills --limit 4   # solo fotogramas (output/stills/), para revisarlos
-python tools/make_clips.py --wait               # genera los clips que falten; si se agota la cuota, espera y sigue
-python tools/make_clips.py mago-fogata-1        # rehace una escena
+python tools/make_clips.py --wait               # genera lo que falte; si se agota la cuota, espera y sigue
+python tools/make_clips.py mago-fogata-1        # rehace una escena (y borra sus continuaciones)
+python tools/make_clips.py mago-fogata-1c       # rehace solo esa continuación
 ```
-La cuota gratuita de GPU de Hugging Face es pequeña (~1 clip por vez y luego hay que esperar a que se
+La cuota gratuita de GPU de Hugging Face es pequeña (~1-2 trozos por vez y luego hay que esperar a que se
 recargue). El workflow *Generar clips* completa la biblioteca solo (cada hora, desde los servidores de GitHub, primero
-una variante de cada combinación) y se desactiva al terminar; para añadir escenas nuevas, edítalas y vuelve a
+las tomas completas del primer lugar de cada combinación) y se desactiva al terminar; para añadir escenas nuevas, edítalas y vuelve a
 activarlo. Al lanzarlo a mano puedes pedir solo fotogramas de escenas concretas: quedan para descargar en la
 ejecución (*Artifacts → fotogramas*).
 

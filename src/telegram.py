@@ -41,7 +41,7 @@ def send_draft(token: str, chat_id: str, video: Path, title: str, caption: str, 
     bloque que se copia con un toque."""
     with tempfile.TemporaryDirectory() as tmp:
         thumb = Path(tmp) / "thumb.jpg"
-        render_poster(video, thumb)
+        render_poster(video, thumb, at=duration * 0.7)  # con la frase ya completa
         Image.open(thumb).resize((180, 320), Image.LANCZOS).save(thumb, quality=85)
         with open(video, "rb") as v, open(thumb, "rb") as t:
             _call(token, "sendVideo",
