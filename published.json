@@ -29,6 +29,12 @@
       "date": "2026-10-22",
       "autor": "Carl Gustav Jung",
       "media_id": "borrador"
+    },
+    {
+      "id": "c6ce1c551d35",
+      "date": "2026-10-23",
+      "autor": "Friedrich Nietzsche",
+      "media_id": "borrador"
     }
   ]
 }
