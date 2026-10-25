@@ -35,6 +35,12 @@
       "date": "2026-10-23",
       "autor": "Friedrich Nietzsche",
       "media_id": "borrador"
+    },
+    {
+      "id": "5da1da94eebd",
+      "date": "2026-10-24",
+      "autor": "Plotino",
+      "media_id": "borrador"
     }
   ]
 }
