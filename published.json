@@ -59,6 +59,12 @@
       "date": "2026-10-27",
       "autor": "Carl Gustav Jung",
       "media_id": "borrador"
+    },
+    {
+      "id": "c75f33a36b5c",
+      "date": "2026-10-28",
+      "autor": "Jorge Luis Borges",
+      "media_id": "borrador"
     }
   ]
 }
