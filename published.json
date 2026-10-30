@@ -65,6 +65,12 @@
       "date": "2026-10-28",
       "autor": "Jorge Luis Borges",
       "media_id": "borrador"
+    },
+    {
+      "id": "0aab719e7866",
+      "date": "2026-10-29",
+      "autor": "Jean-Jacques Rousseau",
+      "media_id": "borrador"
     }
   ]
 }
