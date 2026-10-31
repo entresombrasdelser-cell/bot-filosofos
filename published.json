@@ -71,6 +71,12 @@
       "date": "2026-10-29",
       "autor": "Jean-Jacques Rousseau",
       "media_id": "borrador"
+    },
+    {
+      "id": "3ad0842a0958",
+      "date": "2026-10-30",
+      "autor": "Albert Camus",
+      "media_id": "borrador"
     }
   ]
 }
