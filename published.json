@@ -89,6 +89,12 @@
       "date": "2026-11-01",
       "autor": "Sócrates",
       "media_id": "borrador"
+    },
+    {
+      "id": "565119206d9b",
+      "date": "2026-11-02",
+      "autor": "John Locke",
+      "media_id": "borrador"
     }
   ]
 }
