@@ -95,6 +95,12 @@
       "date": "2026-11-02",
       "autor": "John Locke",
       "media_id": "borrador"
+    },
+    {
+      "id": "1c713d88daa9",
+      "date": "2026-11-03",
+      "autor": "Platón",
+      "media_id": "borrador"
     }
   ]
 }
