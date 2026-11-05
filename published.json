@@ -101,6 +101,12 @@
       "date": "2026-11-03",
       "autor": "Platón",
       "media_id": "borrador"
+    },
+    {
+      "id": "1bf299d68749",
+      "date": "2026-11-04",
+      "autor": "Sigmund Freud",
+      "media_id": "borrador"
     }
   ]
 }
