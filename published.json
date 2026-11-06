@@ -107,6 +107,12 @@
       "date": "2026-11-04",
       "autor": "Sigmund Freud",
       "media_id": "borrador"
+    },
+    {
+      "id": "62b9c93862d2",
+      "date": "2026-11-05",
+      "autor": "Georg Wilhelm Friedrich Hegel",
+      "media_id": "borrador"
     }
   ]
 }
