@@ -131,6 +131,12 @@
       "date": "2026-11-08",
       "autor": "Jean-Paul Sartre",
       "media_id": "borrador"
+    },
+    {
+      "id": "0a03b2153505",
+      "date": "2026-11-09",
+      "autor": "Arthur Schopenhauer",
+      "media_id": "borrador"
     }
   ]
 }
